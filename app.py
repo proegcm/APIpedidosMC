@@ -180,8 +180,6 @@ def ingresoPedidoMC():
         ESTATUS = infoPedido.get('estatus')
         USUARIO = data.get('usuario')
         DETALLE = json.dumps(infoPedido.get('detallePedido', []))
-        print("entra infoPedido: ",infoPedido)
-        print("entra usuario: ",USUARIO)
 
         # Inserta los datos en la tabla USUARIO en SQL Server
         connection = get_sql_server_connection()
@@ -191,7 +189,7 @@ def ingresoPedidoMC():
                 VALUES (?, ?, ?, ?, ?, ?, ?, (SELECT ID_USUARIO FROM USUARIO WHERE USERNAME=?), ?)""", (FOLIO, FECHA, CAJERO, CLIENTE, TOTAL, PAGO, CAMBIO, USUARIO, DETALLE))
             connection.commit()
 
-            return jsonify({"mensaje": f"El pedido con No. folio {FOLIO}  ha pasado a producción."}), 201
+            return jsonify({"mensaje": f"El pedido de {CLIENTE} con No. folio {FOLIO} ha pasado a producción."}), 201
     
         except pyodbc.Error as e:
             # Rollback en caso de error
@@ -206,7 +204,7 @@ def ingresoPedidoMC():
 
             # Manejar error de clave duplicada
             elif '23000' in error_code and 'duplicate key' in error_msg.lower():
-                return jsonify({"error": f"El pedido con número de folio {FOLIO} ya se encuentra registrado."}), 409
+                return jsonify({"error": f"El pedido de {CLIENTE} con No. folio {FOLIO} ya se encuentra registrado."}), 409
 
             # Otros errores
             else:
@@ -254,6 +252,7 @@ def obtengoPedidosDashboardMC():
                         p.Cambio AS CAMBIO,
                         ur.Username AS USUARIO_REGISTRO,
                         p.Estatus AS ESTADO_ACTUAL,
+                        p.Detalle AS DETALLE, 
                         uc.Username AS USUARIO_CAMBIO,
                         um.Username AS MENSAJERO,
                         um.ID_Usuario AS IDMENSAJERO,
@@ -313,6 +312,7 @@ def obtengoPedidosDashboardMC():
                 "id_mens": quitaNulo(row.IDMENSAJERO),
                 "paqueteria": quitaNulo(row.PAQUETERIA),
                 "id_paq": quitaNulo(row.IDPAQUETERIA),
+                "detallePedido": json.loads(quitaNulo(row.DETALLE)),
                 "usuario_registro": quitaNulo(row.USUARIO_REGISTRO),
                 "usuario_cambio" : quitaNulo(row.USUARIO_CAMBIO),
                 "estado_actual": quitaNulo(row.ESTADO_ACTUAL),
@@ -675,6 +675,7 @@ def cambioEstadoPedidoMC():
     # Procesa los datos JSON
     try:
         FOLIO = data.get('folio')
+        CLIENTE = data.get('cliente')
         ESTADO_ANTERIOR = data.get('estadoAnterior')
         ESTADO_NUEVO = data.get('estadoNuevo')
         USUARIO_CAMBIO = data.get('usuario')
@@ -682,6 +683,10 @@ def cambioEstadoPedidoMC():
         PAQUETERIA = data.get('idPaqueteria')
         OBSERVACIONES = data.get('observaciones')
 
+        if ESTADO_ANTERIOR == 'Envío por Paquetería':
+            PAQUETERIA = None
+        elif ESTADO_ANTERIOR == 'Envío por Mensajería':
+            MENSAJERO = None
 
         # Inserta los datos en la tabla ESTADOS_PEDIDOS en SQL Server
         connection = get_sql_server_connection()
@@ -692,7 +697,7 @@ def cambioEstadoPedidoMC():
                            (FOLIO, ESTADO_ANTERIOR, ESTADO_NUEVO, USUARIO_CAMBIO, MENSAJERO, PAQUETERIA, OBSERVACIONES))
             connection.commit()
 
-            return jsonify({"mensaje": "Pedido No. "+FOLIO+" trasladado al estado "+ESTADO_NUEVO+"."}), 201
+            return jsonify({"mensaje": f"El pedido de {CLIENTE} con No. de folio {FOLIO} fue trasladado a {ESTADO_NUEVO}."}), 201
     
         except pyodbc.Error as e:
             # Si ocurre un error, deshace los cambios
